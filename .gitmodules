@@ -1,0 +1,3 @@
+[submodule "omni_vla"]
+	path = omni_vla
+	url = https://github.com/YanYaoyuan/Omni_VLA.git
