@@ -11,8 +11,8 @@
 # WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
 # See the License for the specific language governing permissions and
 # limitations under the License.
+# openpi model configs
 
-import glob
 import os
 
 import torch
@@ -20,143 +20,108 @@ from omegaconf import DictConfig
 
 
 def get_model(cfg: DictConfig, torch_dtype=None):
-    import safetensors.torch
+    import glob
 
-    from omni_vla.models_pytorch.omni_config import OmniConfig
+    import omni_vla.shared.download as download
+    import omni_vla.transforms as transforms
+    import safetensors
+    from omni_vla.training import checkpoints as _checkpoints
+
+    from rlinf.models.embodiment.omni_vla.dataconfig import get_omni_vla_config
     from rlinf.models.embodiment.omni_vla.omni_vla_action_model import (
+        OmniVLAConfig,
         OmniVLAForRLActionPrediction,
-        OmniVLAForRLConfig,
     )
 
-    # ------------------------------------------------------------------
-    # 1. Build OmniConfig from YAML
-    # ------------------------------------------------------------------
-    omni_cfg = getattr(cfg, "omni_vla", None) or {}
+    # config
+    config_name = getattr(cfg.omni_vla, "config_name", None)
+    data_kwargs = getattr(cfg, "omni_vla_data", None)
+    actor_train_config = get_omni_vla_config(
+        config_name, model_path=cfg.model_path, data_kwargs=data_kwargs
+    )
 
-    # Base OmniConfig parameters
-    omni_config_kwargs = {}
+    actor_model_config = actor_train_config.model
+    actor_model_config = OmniVLAConfig(**actor_model_config.__dict__)
+    override_model_config_kwargs = cfg.omni_vla
+    if override_model_config_kwargs is not None:
+        for key, val in override_model_config_kwargs.items():
+            actor_model_config.__dict__[key] = val
 
-    # Map from YAML to OmniConfig fields
-    config_field_map = {
-        "g2vlm_path": "g2vlm_path",
-        "g2vlm_config_path": "g2vlm_config_path",
-        "vlm_pretrained_path": "vlm_pretrained_path",
-        "vggt_pretrained_path": "vggt_pretrained_path",
-        "omni_pretrained_path": "omni_pretrained_path",
-        "action_dim": "action_dim",
-        "action_horizon": "action_horizon",
-        "pi05": "pi05",
-        "freeze_vision_encoder": "freeze_vision_encoder",
-        "freeze_language_model": "freeze_language_model",
-        "freeze_VGGT_model": "freeze_VGGT_model",
-        "train_expert_only": "train_expert_only",
-        "train_vlm_only": "train_vlm_only",
-        "dtype": "dtype",
-        "action_expert_variant": "action_expert_variant",
-        "spatial_expert_variant": "spatial_expert_variant",
-        "paligemma_variant": "paligemma_variant",
-        "max_state_dim": "max_state_dim",
-        "max_action_dim": "max_action_dim",
-    }
+    # load model
+    checkpoint_dir = download.maybe_download(str(cfg.model_path))
 
-    for yaml_key, config_key in config_field_map.items():
-        if yaml_key in omni_cfg:
-            omni_config_kwargs[config_key] = omni_cfg[yaml_key]
-
-    omni_config = OmniConfig(**omni_config_kwargs)
-
-    # ------------------------------------------------------------------
-    # 2. Build RL config
-    # ------------------------------------------------------------------
-    rl_config_kwargs = {}
-    rl_field_map = {
-        "noise_method": "noise_method",
-        "noise_level": "noise_level",
-        "noise_anneal": "noise_anneal",
-        "noise_params": "noise_params",
-        "action_chunk": "action_chunk",
-        "action_env_dim": "action_env_dim",
-        "num_steps": "num_steps",
-        "train_expert_only": "train_expert_only",
-        "safe_get_logprob": "safe_get_logprob",
-        "joint_logprob": "joint_logprob",
-        "ignore_last": "ignore_last",
-        "detach_critic_input": "detach_critic_input",
-        "chunk_critic_input": "chunk_critic_input",
-        "add_value_head": "add_value_head",
-        "value_after_vlm": "value_after_vlm",
-        "value_vlm_mode": "value_vlm_mode",
-        "num_images_in_input": "num_images_in_input",
-    }
-
-    for yaml_key, rl_key in rl_field_map.items():
-        if yaml_key in omni_cfg:
-            rl_config_kwargs[rl_key] = omni_cfg[yaml_key]
-
-    # Also pick up top-level cfg overrides
-    if hasattr(cfg, "add_value_head") and cfg.add_value_head:
-        rl_config_kwargs["add_value_head"] = cfg.add_value_head
-    if hasattr(cfg, "action_dim"):
-        rl_config_kwargs["action_env_dim"] = cfg.action_dim
-    if hasattr(cfg, "num_action_chunks"):
-        rl_config_kwargs["action_chunk"] = cfg.num_action_chunks
-
-    rl_config = OmniVLAForRLConfig(**rl_config_kwargs)
-
-    # ------------------------------------------------------------------
-    # 3. Create model
-    # ------------------------------------------------------------------
-    model = OmniVLAForRLActionPrediction(omni_config, rl_config)
-
-    # Apply freeze strategy
-    if rl_config.train_expert_only:
-        model.freeze_vlm()
-    model.set_requires_grad()
-
-    # ------------------------------------------------------------------
-    # 4. Load weights
-    # ------------------------------------------------------------------
-    checkpoint_dir = str(cfg.model_path)
-
-    # Check for FSDP checkpoint formats
-    full_weights_path = os.path.join(checkpoint_dir, "model_state_dict", "full_weights.pt")
+    # Check if this is a checkpoint directory (saved by FSDP)
+    # Check for model_state_dict/full_weights.pt (direct checkpoint) or actor/model_state_dict/full_weights.pt (from runner)
+    full_weights_path = os.path.join(
+        checkpoint_dir, "model_state_dict", "full_weights.pt"
+    )
     actor_full_weights_path = os.path.join(
         checkpoint_dir, "actor", "model_state_dict", "full_weights.pt"
     )
 
+    model: OmniVLAForRLActionPrediction = OmniVLAForRLActionPrediction(
+        actor_model_config
+    )
+    # train expert only
+    # if actor_model_config.train_expert_only:
+    #     model.freeze_vlm()
+    # need modify
+
+    # Load weights from checkpoint if it's a checkpoint directory, otherwise load from safetensors
     if os.path.exists(full_weights_path):
+        # Direct checkpoint directory
         model_state_dict = torch.load(full_weights_path, map_location="cpu")
         model.load_state_dict(model_state_dict, strict=False)
     elif os.path.exists(actor_full_weights_path):
+        # Checkpoint directory from runner
         model_state_dict = torch.load(actor_full_weights_path, map_location="cpu")
         model.load_state_dict(model_state_dict, strict=False)
     else:
-        # Try safetensors format
+        # Original model directory with safetensors files
         weight_paths = sorted(glob.glob(os.path.join(checkpoint_dir, "*.safetensors")))
-        if weight_paths:
-            all_state_dict = {}
-            for weight_path in weight_paths:
-                state_dict = safetensors.torch.load_file(weight_path, device="cpu")
-                all_state_dict.update(state_dict)
-            model.load_state_dict(all_state_dict, strict=False)
-        else:
-            # If omni_pretrained_path is specified, load from there
-            pretrained_path = omni_config.omni_pretrained_path
-            if pretrained_path and os.path.exists(pretrained_path):
-                pretrained_weights = sorted(
-                    glob.glob(os.path.join(pretrained_path, "*.safetensors"))
-                )
-                if pretrained_weights:
-                    all_state_dict = {}
-                    for wp in pretrained_weights:
-                        state_dict = safetensors.torch.load_file(wp, device="cpu")
-                        all_state_dict.update(state_dict)
-                    model.load_state_dict(all_state_dict, strict=False)
+        if not weight_paths:
+            weight_paths = [os.path.join(checkpoint_dir, "model.safetensors")]
+        all_state_dict = {}
+        for weight_path in weight_paths:
+            state_dict = safetensors.torch.load_file(weight_path, device="cpu")
+            all_state_dict.update(state_dict)
+        model.load_state_dict(all_state_dict, strict=False)
 
-    # Convert to bfloat16 for selected params if needed
-    if torch_dtype == torch.bfloat16:
-        for name, param in model.named_parameters():
-            if "norm" not in name.lower() and "ln" not in name.lower():
-                param.data = param.data.to(torch.bfloat16)
+    model.reasoning_spatial_expert.to_bfloat16_for_selected_params("bfloat16")
+    # fsdp replace
+    # model.paligemma_with_expert.replace_gemma_decoder_layers()
+    # load data stats
+    data_config = actor_train_config.data.create(
+        actor_train_config.assets_dirs, actor_model_config
+    )
+    norm_stats = None
+    if norm_stats is None:
+        # We are loading the norm stats from the checkpoint instead of the config assets dir to make sure
+        # that the policy is using the same normalization stats as the original training process.
+        if data_config.asset_id is None:
+            raise ValueError("Asset id is required to load norm stats.")
+        norm_stats = _checkpoints.load_norm_stats(checkpoint_dir, data_config.asset_id)
+    # wrappers
+    repack_transforms = transforms.Group()
+    default_prompt = None
+    model.setup_wrappers(
+        transforms=[
+            *repack_transforms.inputs,
+            transforms.InjectDefaultPrompt(default_prompt),
+            *data_config.data_transforms.inputs,
+            transforms.Normalize(
+                norm_stats, use_quantiles=data_config.use_quantile_norm
+            ),
+            *data_config.model_transforms.inputs,
+        ],
+        output_transforms=[
+            *data_config.model_transforms.outputs,
+            transforms.Unnormalize(
+                norm_stats, use_quantiles=data_config.use_quantile_norm
+            ),
+            *data_config.data_transforms.outputs,
+            *repack_transforms.outputs,
+        ],
+    )
 
     return model

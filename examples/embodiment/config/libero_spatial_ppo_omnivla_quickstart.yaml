@@ -130,6 +130,8 @@ actor:
       # Freeze VLM + VGGT, only train action expert + spatial expert
       train_expert_only: True
       detach_critic_input: True
+      config_name: omni_libero
+
 
   optim:
     lr: 1.0e-6
