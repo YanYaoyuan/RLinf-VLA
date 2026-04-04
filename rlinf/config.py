@@ -60,6 +60,7 @@ class SupportedModel(Enum):
     FLOW_POLICY = ("flow_policy", "embodied")
     CMA_POLICY = ("cma", "embodied")
     LINGBOTVLA = ("lingbotvla", "embodied")
+    OMNIVLA = ("omni_vla", "embodied")
     RESNET_REWARD = ("resnet", "embodied")
 
     # Sft models

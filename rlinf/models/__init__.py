@@ -40,6 +40,8 @@ def get_model(cfg: DictConfig):
         from rlinf.models.embodiment.flow_policy import get_model
     elif model_type == SupportedModel.LINGBOTVLA:
         from rlinf.models.embodiment.lingbotvla import get_model
+    elif model_type == SupportedModel.OMNIVLA:
+        from rlinf.models.embodiment.omni_vla import get_model
     else:
         return None
 
@@ -83,6 +85,12 @@ def get_model(cfg: DictConfig):
                 tag_vlm_subtree(model, False)
                 tag_vlm_subtree(module_to_lora, True)
                 model.paligemma_with_expert.paligemma = module_to_lora
+            elif model_type == SupportedModel.OMNIVLA:
+                module_to_lora = model.reasoning_spatial_expert.reasoning_expert
+                module_to_lora = get_peft_model(module_to_lora, lora_config)
+                tag_vlm_subtree(model, False)
+                tag_vlm_subtree(module_to_lora, True)
+                model.reasoning_spatial_expert.reasoning_expert = module_to_lora
             else:
                 model = get_peft_model(model, lora_config)
         else:

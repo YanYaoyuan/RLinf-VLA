@@ -1,0 +1,60 @@
+model_type: "omni_vla"
+
+# Model path - checkpoint directory containing safetensors or FSDP weights
+model_path: "/path/to/omni_vla_checkpoint"
+
+precision: null
+
+# Action and chunk settings
+# OmniVLA internally uses 32-dim action space, action_dim is the actual env dim
+num_action_chunks: 10
+action_dim: 7
+
+# LoRA settings
+is_lora: False
+lora_rank: 32
+
+# Training settings
+use_proprio: True
+num_steps: 10
+add_value_head: False
+
+# OmniVLA specific parameters
+omni_vla:
+  # Model architecture
+  action_dim: 32
+  action_horizon: 50
+  action_expert_variant: "gemma_300m"
+  dtype: "bfloat16"
+
+  # Pretrained paths
+  vlm_pretrained_path: null
+  vggt_pretrained_path: null
+  omni_pretrained_path: null
+
+  # Freeze strategy
+  train_expert_only: True
+  freeze_vision_encoder: True
+  freeze_language_model: True
+  freeze_VGGT_model: True
+
+  # RL sampling config
+  noise_method: "flow_sde"
+  noise_level: 0.5
+  noise_anneal: False
+  noise_params: [0.7, 0.3, 400]
+  action_chunk: ${actor.model.num_action_chunks}
+  action_env_dim: ${actor.model.action_dim}
+  num_steps: ${actor.model.num_steps}
+  num_images_in_input: 3
+
+  # Critic config
+  add_value_head: ${actor.model.add_value_head}
+  detach_critic_input: False
+  chunk_critic_input: False
+  value_after_vlm: False
+
+  # Log-prob config
+  safe_get_logprob: False
+  joint_logprob: False
+  ignore_last: False
