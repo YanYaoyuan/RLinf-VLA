@@ -101,21 +101,18 @@ class OmniVLAForRLActionPrediction(OmniVLA, BasePolicy):
 
     @property
     def _no_split_modules(self) -> list[str]:
-        if self.rl_config.train_expert_only:
-            return [
-                "GemmaDecoderLayer",
-                "SiglipVisionEmbeddings",
-                "GemmaRMSNorm",
-                "GemmaRotaryEmbedding",
-                "Qwen2DecoderLayer",
-            ]
-        return [
-            "GemmaMLP",
+        # Dynamically determine which transformer layer classes actually exist
+        # in this model instance, to avoid FSDP wrap policy failures.
+        candidates = [
+            "GemmaDecoderLayer",
             "SiglipVisionEmbeddings",
             "GemmaRMSNorm",
             "GemmaRotaryEmbedding",
-            "Qwen2DecoderLayer",
+            "GemmaMLP",
         ]
+        # Collect all class names present in the model
+        present_cls_names = {type(m).__name__ for m in self.modules()}
+        return [c for c in candidates if c in present_cls_names]
 
     @property
     def _no_split_names(self) -> list[str]:
@@ -177,10 +174,11 @@ class OmniVLAForRLActionPrediction(OmniVLA, BasePolicy):
             images["right_wrist_0_rgb"] = torch.zeros_like(main)
             image_masks["right_wrist_0_rgb"] = torch.zeros(bsize, dtype=torch.bool, device=device)
 
-        # State - pad to max_state_dim (32)
+        # State - pad to action_dim (32) to match model's internal state dimension
         state = env_obs["states"]
-        if state.shape[-1] < self.config.max_state_dim:
-            state = F.pad(state, (0, self.config.max_state_dim - state.shape[-1]))
+        pad_dim = self.config.action_dim  # OmniVLA uses action_dim (32) as state pad target
+        if state.shape[-1] < pad_dim:
+            state = F.pad(state, (0, pad_dim - state.shape[-1]))
 
         processed = {
             "image": images,
@@ -614,7 +612,7 @@ class OmniVLAForRLActionPrediction(OmniVLA, BasePolicy):
         )
 
         if (
-            self.reasoning_spatial_expert.reasoning_expert.language_model.model.layers[0]
+            self.reasoning_spatial_expert.reasoning_expert.language_model.layers[0]
             .self_attn.q_proj.weight.dtype == torch.bfloat16
         ):
             suffix_embs = suffix_embs.to(dtype=torch.bfloat16)
@@ -749,7 +747,7 @@ class OmniVLAForRLActionPrediction(OmniVLA, BasePolicy):
         )
 
         if (
-            self.reasoning_spatial_expert.reasoning_expert.language_model.model.layers[0]
+            self.reasoning_spatial_expert.reasoning_expert.language_model.layers[0]
             .self_attn.q_proj.weight.dtype == torch.bfloat16
         ):
             suffix_embs = suffix_embs.to(dtype=torch.bfloat16)
@@ -896,7 +894,7 @@ class OmniVLAForRLActionPrediction(OmniVLA, BasePolicy):
         """Tokenize text prompts and add to obs dict."""
         from transformers import AutoTokenizer
 
-        tokenizer = AutoTokenizer.from_pretrained("google/paligemma-3b-pt-224")
+        tokenizer = AutoTokenizer.from_pretrained("/root/.cache/openpi/big_vision/paligemma_tokenizer.model")
         max_len = self.config.max_token_len or 128
 
         encoded = tokenizer(
