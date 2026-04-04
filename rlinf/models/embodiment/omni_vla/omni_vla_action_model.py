@@ -101,21 +101,18 @@ class OmniVLAForRLActionPrediction(OmniVLA, BasePolicy):
 
     @property
     def _no_split_modules(self) -> list[str]:
-        if self.rl_config.train_expert_only:
-            return [
-                "GemmaDecoderLayer",
-                "SiglipVisionEmbeddings",
-                "GemmaRMSNorm",
-                "GemmaRotaryEmbedding",
-                "Qwen2DecoderLayer",
-            ]
-        return [
-            "GemmaMLP",
+        # Dynamically determine which transformer layer classes actually exist
+        # in this model instance, to avoid FSDP wrap policy failures.
+        candidates = [
+            "GemmaDecoderLayer",
             "SiglipVisionEmbeddings",
             "GemmaRMSNorm",
             "GemmaRotaryEmbedding",
-            "Qwen2DecoderLayer",
+            "GemmaMLP",
         ]
+        # Collect all class names present in the model
+        present_cls_names = {type(m).__name__ for m in self.modules()}
+        return [c for c in candidates if c in present_cls_names]
 
     @property
     def _no_split_names(self) -> list[str]:
