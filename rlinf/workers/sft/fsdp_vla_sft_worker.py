@@ -53,6 +53,21 @@ class FSDPVlaSftWorker(FSDPSftWorker):
             return build_lingbot_sft_dataloader(
                 self.cfg, self._world_size, self._rank, data_paths
             )
+        elif SupportedModel(self.cfg.actor.model.model_type) in [SupportedModel.OMNIVLA]:
+            import omni_vla.training.data_loader as omnivla_data_loader
+
+            from rlinf.models.embodiment.omni_vla.dataconfig import get_omni_vla_config
+
+            config = get_omni_vla_config(
+                self.cfg.actor.model.omni_vla.config_name,
+                model_path=self.cfg.actor.model.model_path,
+                batch_size=self.cfg.actor.micro_batch_size * self._world_size,
+                data_kwargs=getattr(self.cfg.actor, "omni_vla_data", None),
+            )
+            data_loader = omnivla_data_loader.create_data_loader(
+                config, framework="pytorch", shuffle=True
+            )
+            return data_loader, data_loader.data_config()
         else:
             raise KeyError(
                 f"not support such model type {self.cfg.actor.model.model_type} for SFT right now."

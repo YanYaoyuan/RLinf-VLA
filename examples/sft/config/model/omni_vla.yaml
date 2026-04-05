@@ -18,8 +18,8 @@ use_proprio: True
 num_steps: 4
 add_value_head: False
 
-# openpi specific parameters
-openpi:
+# omni_vla specific parameters
+omni_vla:
   config_name: "omni_libero"
   num_images_in_input: 2
   noise_level: 0.5
@@ -30,3 +30,5 @@ openpi:
   noise_method: "flow_sde"
   add_value_head: ${actor.model.add_value_head}
   detach_critic_input: False
+  requires_grad: False
+  use_orig_params: true  

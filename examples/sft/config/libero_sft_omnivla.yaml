@@ -20,7 +20,7 @@ runner:
   logger:
     log_path: "../results"
     project_name: rlinf
-    experiment_name: "test_omnivla"
+    experiment_name: "libero_sft_omnivla"
     logger_backends: ["wandb"] # wandb, swanlab
 
   max_epochs: 30000
@@ -29,7 +29,7 @@ runner:
   save_interval: 10000
 
 data:
-  train_data_paths: "/path/to/libero-data"
+  train_data_paths: "/root/autodl-tmp/dataset/libero_lerobot"
 
 algorithm:
   adv_type: gae
@@ -44,7 +44,7 @@ actor:
   # Override the default values in model/omni_vla
   model:
     precision: null
-    model_path: "/path/to/omni_vla-model"
+    model_path: "/root/autodl-tmp/checkpoints/omnivla_base/OmniVLA-base"
     num_action_chunks: 4 # interface for the env
     add_value_head: False
     omni_vla:
@@ -67,7 +67,7 @@ actor:
   fsdp_config:
     strategy: "fsdp"
     sharding_strategy: "full_shard"
-    use_orig_params: False
+    use_orig_params: True
     gradient_checkpointing: False # for omnivla, gradient checkpointing is not supported, please do not change this value
     mixed_precision:
       param_dtype: ${actor.model.precision}
