@@ -104,7 +104,7 @@ rollout:
   generation_backend: "huggingface"
   recompute_logprobs: False
   unnorm_key: libero_10
-  enable_offload: True
+  enable_offload: False
   pipeline_stage_num: 1
 
   model:
@@ -117,7 +117,7 @@ actor:
   micro_batch_size: 32  # OmniVLA is larger (3 experts + VGGT), reduce batch size
   global_batch_size: 128
   seed: 42
-  enable_offload: True
+  enable_offload: False # FSDP shape
 
   model:
     model_path: "/root/autodl-tmp/checkpoints/omnivla_base/OmniVLA-base"  # TODO: set your OmniVLA SFT checkpoint path
@@ -145,7 +145,7 @@ actor:
 
   fsdp_config:
     strategy: "fsdp"
-    sharding_strategy: "no_shard"
+    sharding_strategy: "full_shard"
     gradient_checkpointing: False
     use_orig_params: True
     mixed_precision:

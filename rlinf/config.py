@@ -374,7 +374,7 @@ def validate_fsdp_cfg(cfg: DictConfig) -> DictConfig:
         cfg.fsdp_config.backward_prefetch = cfg.fsdp_config.get(
             "backward_prefetch", None
         )
-        cfg.fsdp_config.use_orig_params = cfg.fsdp_config.get("use_orig_params", False)
+        # cfg.fsdp_config.use_orig_params = cfg.fsdp_config.get("use_orig_params", False)
         cfg.fsdp_config.use_liger_kernel = cfg.fsdp_config.get(
             "use_liger_kernel", False
         )
